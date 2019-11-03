@@ -19,9 +19,6 @@ break rust_begin_unwind
 # next 4
 # end
 
-# *try* to stop at the user entry point (it might be gone due to inlining)
-break main
-
 monitor semihosting enable
 
 # # send captured ITM to the file itm.fifo
@@ -38,21 +35,4 @@ monitor semihosting enable
 # monitor itm port 0 on
 
 load
-
-# start the process but immediately halt the processor
-#stepi
-#continue
-
-
-
-# mine
-#target remote equinox:2331
-#load
-#set print asm-demangle on
-#set backtrace limit 32
-#break DefaultHandler
-#break HardFault
-#break rust_begin_unwind
-#break main
-#continue
-#stepi
+cont
