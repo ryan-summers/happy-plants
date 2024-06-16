@@ -1,0 +1,8 @@
+[package]
+name = "si1145"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+embedded-hal = "1"
+num_enum = { version = "0.7", default-features = false }
