@@ -84,19 +84,18 @@ where
 
     pub fn reset(&mut self) -> Result<(), Error<T::Error>> {
         defmt::info!("SI1145 reset start");
+        // Send a reset command to the chip.
+        self.write_reg(Register::Command, 0x1)?;
+        // TODO: Verify the response is valid.
+        let _response = self.read_reg(Register::Response)?;
+
         self.write_reg(Register::MeasRate0, 0)?;
-        defmt::info!("Wrote MEASRATE0");
         self.write_reg(Register::MeasRate1, 0)?;
         self.write_reg(Register::IrqEn, 0)?;
         self.write_reg(Register::IrqMode1, 0)?;
         self.write_reg(Register::IrqMode2, 0)?;
         self.write_reg(Register::IntCfg, 0)?;
         self.write_reg(Register::IrqStat, 0xFF)?;
-
-        // Send a reset command to the chip.
-        //self.write_reg(Register::Command, 0x1)?;
-        // TODO: Verify the response is valid.
-        let _response = self.read_reg(Register::Response)?;
 
         // Initialize the HW_KEY to allow for normal chip operation.
         self.write_reg(Register::HwKey, 0x17)?;
@@ -127,7 +126,10 @@ where
 
     fn write_parameter(&mut self, parameter: Param, value: u8) -> Result<(), Error<T::Error>> {
         self.write_reg(Register::ParamWr, value)?;
-        self.write_reg(Register::Command, parameter.into())?;
+        self.write_reg(
+            Register::Command,
+            Into::<u8>::into(parameter) | 0b1010_0000_u8,
+        )?;
 
         // TODO: Verify response.
         let _response = self.read_reg(Register::Response)?;
@@ -158,18 +160,22 @@ where
         Ok(uv_register as f32 / 100.0)
     }
 
-    pub fn read_visible(&mut self) -> Result<f32, Error<T::Error>> {
-        let visible_register = self.read_reg_u16(Register::AlsVisData0)?;
-
-        // The datasheet specifies 0.282 ADC counts / lux for sunlight response with ADC_GAIN = 0
-        // and VIS_RANGE = 0. We use high range mode, so further compensate for the lower ADC gain.
-        Ok(visible_register as f32 / 0.282 * 14.5)
+    pub fn read_visible(&mut self) -> Result<u16, Error<T::Error>> {
+        self.read_reg_u16(Register::AlsVisData0)
     }
 
-    pub fn read_infrared(&mut self) -> Result<f32, Error<T::Error>> {
-        let ir_register = self.read_reg_u16(Register::AlsIrData0)?;
-        // The datasheet specifies 2.44 ADC counts / lux. We use high range mode, so compensate for
-        // the 14.5 ADC gain reduction.
-        Ok(ir_register as f32 / 2.44 * 14.5)
+    pub fn read_infrared(&mut self) -> Result<u16, Error<T::Error>> {
+        self.read_reg_u16(Register::AlsIrData0)
+    }
+
+    pub fn read_lux(&mut self) -> Result<f32, Error<T::Error>> {
+        // ADC codes represent values of 256 and lower as "dark" or "negative" light. Thus, the
+        // zero point is at 256 ADC counts.
+        let als_vis = self.read_reg_u16(Register::AlsVisData0)? - 256;
+        let als_ir = self.read_reg_u16(Register::AlsIrData0)? - 256;
+
+        // The equation here is taken from AN523 section 6. The coefficinents in use assume there
+        // is no coverglass over the sensor.
+        Ok((5.41 * als_vis as f32 * 14.5) + (-0.08 * als_ir as f32))
     }
 }
