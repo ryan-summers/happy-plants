@@ -17,8 +17,11 @@ panic-probe = { version = "0.3", features = ["print-defmt"] }
 embassy-nrf = { git = "https://github.com/embassy-rs/embassy", branch = "main", features = ["defmt", "nrf52840", "gpiote"]}
 embassy-executor = { git = "https://github.com/embassy-rs/embassy", branch = "main" , features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
 embedded-hal-async = "1"
+embedded-hal = "1"
+embedded-hal-bus = "0.2"
 
 si7021 = { path = "si7021-rs" }
+si1145 = { path = "si1145" }
 
 [profile.release]
 codegen-units = 1 # better optimizations

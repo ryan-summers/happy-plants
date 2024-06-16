@@ -35,6 +35,7 @@ enum Param {
 
 #[derive(IntoPrimitive)]
 #[repr(u8)]
+#[derive(Debug, Copy, Clone)]
 pub enum ResponseError {
     InvalidComand = 0x80,
     AdcOverflowPs1 = 0x88,
@@ -45,6 +46,7 @@ pub enum ResponseError {
     AdcOverflowAux = 0x8e,
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum Error<T> {
     Interface(T),
     Response(ResponseError),
@@ -81,7 +83,9 @@ where
     }
 
     pub fn reset(&mut self) -> Result<(), Error<T::Error>> {
+        defmt::info!("SI1145 reset start");
         self.write_reg(Register::MeasRate0, 0)?;
+        defmt::info!("Wrote MEASRATE0");
         self.write_reg(Register::MeasRate1, 0)?;
         self.write_reg(Register::IrqEn, 0)?;
         self.write_reg(Register::IrqMode1, 0)?;
@@ -90,7 +94,7 @@ where
         self.write_reg(Register::IrqStat, 0xFF)?;
 
         // Send a reset command to the chip.
-        self.write_reg(Register::Command, 0x1)?;
+        //self.write_reg(Register::Command, 0x1)?;
         // TODO: Verify the response is valid.
         let _response = self.read_reg(Register::Response)?;
 
@@ -163,7 +167,7 @@ where
     }
 
     pub fn read_infrared(&mut self) -> Result<f32, Error<T::Error>> {
-        let ir_register = self.read_reg_u16(Register::AlsVisData0)?;
+        let ir_register = self.read_reg_u16(Register::AlsIrData0)?;
         // The datasheet specifies 2.44 ADC counts / lux. We use high range mode, so compensate for
         // the 14.5 ADC gain reduction.
         Ok(ir_register as f32 / 2.44 * 14.5)
