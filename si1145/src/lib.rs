@@ -70,24 +70,31 @@ impl<T> Si1145<T>
 where
     T: I2c,
 {
-    pub fn new(device: T) -> Result<Self, Error<T::Error>> {
+    pub fn new(
+        device: T,
+        delay: &mut impl embedded_hal::delay::DelayNs,
+    ) -> Result<Self, Error<T::Error>> {
         let mut si114 = Self {
             addr: DEFAULT_ADDR,
             device,
         };
 
-        si114.reset()?;
+        si114.reset(delay)?;
 
         // TODO: Load factory calibration data for UV constants.
         Ok(si114)
     }
 
-    pub fn reset(&mut self) -> Result<(), Error<T::Error>> {
+    pub fn reset(
+        &mut self,
+        delay: &mut impl embedded_hal::delay::DelayNs,
+    ) -> Result<(), Error<T::Error>> {
         defmt::info!("SI1145 reset start");
         // Send a reset command to the chip.
         self.write_reg(Register::Command, 0x1)?;
-        // TODO: Verify the response is valid.
-        let _response = self.read_reg(Register::Response)?;
+
+        // The datasheet says to not perform any operations for at least 1 millisecond after reset.
+        delay.delay_ms(2);
 
         self.write_reg(Register::MeasRate0, 0)?;
         self.write_reg(Register::MeasRate1, 0)?;
@@ -171,8 +178,10 @@ where
     pub fn read_lux(&mut self) -> Result<f32, Error<T::Error>> {
         // ADC codes represent values of 256 and lower as "dark" or "negative" light. Thus, the
         // zero point is at 256 ADC counts.
-        let als_vis = self.read_reg_u16(Register::AlsVisData0)? - 256;
-        let als_ir = self.read_reg_u16(Register::AlsIrData0)? - 256;
+        let als_vis = self
+            .read_reg_u16(Register::AlsVisData0)?
+            .saturating_sub(256);
+        let als_ir = self.read_reg_u16(Register::AlsIrData0)?.saturating_sub(256);
 
         // The equation here is taken from AN523 section 6. The coefficinents in use assume there
         // is no coverglass over the sensor.

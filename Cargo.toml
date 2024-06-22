@@ -14,8 +14,9 @@ cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 
-embassy-nrf = { git = "https://github.com/embassy-rs/embassy", branch = "main", features = ["defmt", "nrf52840", "gpiote"]}
+embassy-nrf = { git = "https://github.com/embassy-rs/embassy", branch = "main", features = ["defmt", "nrf52840", "gpiote", "time-driver-rtc1"]}
 embassy-executor = { git = "https://github.com/embassy-rs/embassy", branch = "main" , features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
+embassy-time = { git = "https://github.com/embassy-rs/embassy", branch = "main"  }
 embedded-hal-async = "1"
 embedded-hal = "1"
 embedded-hal-bus = "0.2"
