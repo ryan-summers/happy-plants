@@ -35,6 +35,10 @@ async fn main(_spawner: Spawner) {
     defmt::info!("SI1145 initialized");
 
     loop {
+        if !si1145.measurement_ready().unwrap() {
+            si1145.reset(&mut delay).unwrap();
+        }
+
         let temperature = si7021.temperature_celsius().unwrap();
         let humidity = si7021.relative_humidity().unwrap();
 
@@ -42,8 +46,9 @@ async fn main(_spawner: Spawner) {
         let ir_counts = si1145.read_visible().unwrap();
         let illumination_lux = si1145.read_lux().unwrap();
         let uv_index = si1145.read_uv_index().unwrap();
+
         //defmt::info!("Temp: {=f32} *C, Humidity: {=f32}%, Illum: {=f32} lx, UV index: {=f32}, Vis: {=u16:X}, IR: {=u16:X}", temperature, humidity, illumination_lux, uv_index, visible_counts, ir_counts);
-        defmt::info!("plants,position=bedroom-nw-window temperature={=f32} humidity={=f32} illumination={=f32} uv-index={=f32} visible-adc={=u16} ir-adc={=u16}", temperature, humidity, illumination_lux, uv_index, visible_counts, ir_counts);
+        defmt::info!("environment,position=bedroom-nw-window temperature={=f32},humidity={=f32},illumination={=f32},uv-index={=f32},visible-adc={=u16},ir-adc={=u16}", temperature, humidity, illumination_lux, uv_index, visible_counts, ir_counts);
         delay.delay_ms(1000);
     }
 }

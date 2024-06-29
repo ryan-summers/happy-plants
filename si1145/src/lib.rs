@@ -1,6 +1,7 @@
 #![no_std]
 use embedded_hal::i2c::I2c;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
+use core::convert::TryFrom;
 
 #[derive(IntoPrimitive)]
 #[repr(u8)]
@@ -33,7 +34,7 @@ enum Param {
     AlsIrAdcMisc = 0x1f,
 }
 
-#[derive(IntoPrimitive)]
+#[derive(IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[derive(Debug, Copy, Clone)]
 pub enum ResponseError {
@@ -44,6 +45,19 @@ pub enum ResponseError {
     AdcOverflowAlsVis = 0x8c,
     AdcOverflowAlsIr = 0x8d,
     AdcOverflowAux = 0x8e,
+}
+
+struct ResponseRegister(pub u8);
+
+impl ResponseRegister {
+    pub fn as_result(self) -> Result<(), ResponseError> {
+        let error_bits = self.0 & 0xF0;
+        if let Ok(err) = ResponseError::try_from(error_bits) {
+            Err(err)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -85,6 +99,12 @@ where
         Ok(si114)
     }
 
+    pub fn measurement_ready(&mut self) -> Result<bool, Error<T::Error>> {
+        let irq_status = self.read_reg(Register::IrqStat)?;
+        self.write_reg(Register::IrqStat, irq_status)?;
+        Ok(irq_status != 0)
+    }
+
     pub fn reset(
         &mut self,
         delay: &mut impl embedded_hal::delay::DelayNs,
@@ -98,7 +118,7 @@ where
 
         self.write_reg(Register::MeasRate0, 0)?;
         self.write_reg(Register::MeasRate1, 0)?;
-        self.write_reg(Register::IrqEn, 0)?;
+        self.write_reg(Register::IrqEn, 0b1)?;
         self.write_reg(Register::IrqMode1, 0)?;
         self.write_reg(Register::IrqMode2, 0)?;
         self.write_reg(Register::IntCfg, 0)?;
@@ -124,10 +144,22 @@ where
 
         // Configure the chip for auto-run mode with measurements at 8ms intervals.
         self.write_reg(Register::MeasRate0, 0xFF)?;
-        self.write_reg(Register::Command, 0x0F)?;
-        // TODO: Verify the response is valid.
-        let _response = self.read_reg(Register::Response)?;
 
+        self.write_reg(Register::Command, 0x0F)?;
+        self.check_response_register()?;
+
+        Ok(())
+    }
+
+    fn check_response_register(&mut self) -> Result<(), Error<T::Error>> {
+        let response = ResponseRegister(self.read_reg(Register::Response)?).as_result();
+
+        // Clear the error register by writing a NOP command.
+        if response.is_err() {
+            self.write_reg(Register::Command, 0)?;
+        }
+
+        response.map_err(Error::Response)?;
         Ok(())
     }
 
@@ -138,8 +170,7 @@ where
             Into::<u8>::into(parameter) | 0b1010_0000_u8,
         )?;
 
-        // TODO: Verify response.
-        let _response = self.read_reg(Register::Response)?;
+        self.check_response_register()?;
         Ok(())
     }
 
