@@ -1,4 +1,56 @@
-#![no_std]
+//! A platform agnostic Rust driver for the Silicon Labs Si1145/46/47 ambient light sensor based on
+//! the [`embedded-hal`](https://github.com/rust-embedded/embedded-hal) traits.
+//!
+//! ## Overview
+//!
+//! The Si1145/46/47 is a low-power, reflectance-based, infrared proximity, ultraviolet (UV) index, and
+//! ambient light sensor with I2C digital interface and programmable event interrupt output.
+//!
+//! * [Datasheet](https://www.silabs.com/documents/public/data-sheets/Si1145-46-47.pdf)
+//!
+//! ## Usage
+//!
+//! ### Creation
+//!
+//! Import the crate and the `embedded-hal` implementation to instantiate the device:
+//! ```no_run
+//! use linux_embedded_hal as hal;
+//!
+//! use hal::{Delay, I2cdev};
+//! use si1145::Si1145;
+//!
+//! # fn main() {
+//! let dev = I2cdev::new("/dev/i2c-1").unwrap();
+//! let mut si1145 = Si1145::new(dev, &mut Delay).unwrap();
+//! # }
+//! ```
+//!
+//! ### Measurement
+//! You can perform measurements of the ambient light lux and UV index whenever measurements are
+//! ready. The device is configured to automatically perform measurements at ~8ms/channel
+//! intervals.
+//!
+//!```no_run
+//! use linux_embedded_hal as hal;
+//!
+//! use hal::{Delay, I2cdev};
+//! use embedded_hal::delay::DelayNs;
+//! use si1145::Si1145;
+//!
+//! # fn main() {
+//! #let dev = I2cdev::new("/dev/i2c-1").unwrap();
+//! #let mut si1145 = Si1145::new(dev, &mut Delay).unwrap();
+//! loop {
+//!     if si1145.measurement_read().unwrap() {
+//!         let lux = si1145.measure_lux().unwrap();
+//!         let uv_index = si1145.measure_uv_index().unwrap();
+//!         println!("Ambient light lux: {lux} lx, UV index: {uv_index:.2f}");
+//!     }
+//!
+//!     Delay.delay_ms(1000u16);
+//! }
+//! # }
+#![cfg_attr(not(test), no_std)]
 use core::convert::TryFrom;
 use embedded_hal::i2c::I2c;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -47,10 +99,11 @@ pub enum ResponseError {
     AdcOverflowAux = 0x8e,
 }
 
+#[derive(Debug, Copy, Clone)]
 struct ResponseRegister(pub u8);
 
 impl ResponseRegister {
-    pub fn as_result(self) -> Result<(), ResponseError> {
+    fn to_result(self) -> Result<(), ResponseError> {
         let error_bits = self.0 & 0xF0;
         if let Ok(err) = ResponseError::try_from(error_bits) {
             Err(err)
@@ -62,7 +115,10 @@ impl ResponseRegister {
 
 #[derive(Debug, Copy, Clone)]
 pub enum Error<T> {
+    /// An error with the usage of the I2C interface occurred.
     Interface(T),
+
+    /// The chip indicated a configuration error.
     Response(ResponseError),
 }
 
@@ -78,12 +134,14 @@ pub struct Si1145<T> {
     device: T,
 }
 
+/// The default I2C address of the device.
 const DEFAULT_ADDR: u8 = 0x60;
 
 impl<T> Si1145<T>
 where
     T: I2c,
 {
+    /// Construct the Si1145 and reset it, preparing it for normal operation.
     pub fn new(
         device: T,
         delay: &mut impl embedded_hal::delay::DelayNs,
@@ -95,21 +153,25 @@ where
 
         si114.reset(delay)?;
 
-        // TODO: Load factory calibration data for UV constants.
         Ok(si114)
     }
 
+    /// Check if a measurement is ready on the device.
+    ///
+    /// # Note
+    /// This function will clear the measurement ready status after it is called once. It will not
+    /// assert again until a new measurement is ready.
     pub fn measurement_ready(&mut self) -> Result<bool, Error<T::Error>> {
         let irq_status = self.read_reg(Register::IrqStat)?;
         self.write_reg(Register::IrqStat, irq_status)?;
         Ok(irq_status != 0)
     }
 
+    /// Reset the operating state of the device and prepare it for initial measurements.
     pub fn reset(
         &mut self,
         delay: &mut impl embedded_hal::delay::DelayNs,
     ) -> Result<(), Error<T::Error>> {
-        defmt::info!("SI1145 reset start");
         // Send a reset command to the chip.
         self.write_reg(Register::Command, 0x1)?;
 
@@ -152,7 +214,7 @@ where
     }
 
     fn check_response_register(&mut self) -> Result<(), Error<T::Error>> {
-        let response = ResponseRegister(self.read_reg(Register::Response)?).as_result();
+        let response = ResponseRegister(self.read_reg(Register::Response)?).to_result();
 
         // Clear the error register by writing a NOP command.
         if response.is_err() {
@@ -193,20 +255,41 @@ where
         Ok(result[0])
     }
 
-    pub fn read_uv_index(&mut self) -> Result<f32, Error<T::Error>> {
+    /// Read the UV index measured by the device.
+    ///
+    /// # Note
+    /// The UV index is a standard measurement ranging from 0 - 11+, where higher values indicate
+    /// higher UV light levels. It is used as an indicator for protection from the sun.
+    pub fn measure_uv_index(&mut self) -> Result<f32, Error<T::Error>> {
         let uv_register = self.read_reg_u16(Register::UvIndex0)?;
         Ok(uv_register as f32 / 100.0)
     }
 
-    pub fn read_visible(&mut self) -> Result<u16, Error<T::Error>> {
+    /// Read the raw visible light ADC conversion value.
+    ///
+    /// # Note
+    /// The device defines a count of 256 to be "zero". Any values below this are considered
+    /// "dark", where no light is provided for the converter.
+    pub fn read_raw_visible(&mut self) -> Result<u16, Error<T::Error>> {
         self.read_reg_u16(Register::AlsVisData0)
     }
 
-    pub fn read_infrared(&mut self) -> Result<u16, Error<T::Error>> {
+    /// Read the raw IR light ADC conversion value.
+    ///
+    /// # Note
+    /// The device defines a count of 256 to be "zero". Any values below this are considered
+    /// "dark", where no light is provided for the converter.
+    pub fn read_raw_infrared(&mut self) -> Result<u16, Error<T::Error>> {
         self.read_reg_u16(Register::AlsIrData0)
     }
 
-    pub fn read_lux(&mut self) -> Result<f32, Error<T::Error>> {
+    /// Measure the ambient light level in lux.
+    ///
+    /// # Note
+    /// This function assumes there is no glass covering the sensor input. Coverglass will affect
+    /// the necessary conversion coefficients to transform the raw ADC measurements into lux
+    /// values.
+    pub fn measure_lux(&mut self) -> Result<f32, Error<T::Error>> {
         // ADC codes represent values of 256 and lower as "dark" or "negative" light. Thus, the
         // zero point is at 256 ADC counts.
         let als_vis = self
@@ -214,7 +297,7 @@ where
             .saturating_sub(256);
         let als_ir = self.read_reg_u16(Register::AlsIrData0)?.saturating_sub(256);
 
-        // The equation here is taken from AN523 section 6. The coefficinents in use assume there
+        // The equation here is taken from AN523 section 6. The coefficients in use assume there
         // is no coverglass over the sensor.
         Ok((5.41 * als_vis as f32 * 14.5) + (-0.08 * als_ir as f32))
     }
