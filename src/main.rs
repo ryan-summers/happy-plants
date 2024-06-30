@@ -61,10 +61,10 @@ async fn main(_spawner: Spawner) {
             .set_humidity(Some(&sgp30::Humidity::from_f32(abs_humidity).unwrap()))
             .unwrap();
 
-        let visible_counts = si1145.read_visible().unwrap();
-        let ir_counts = si1145.read_visible().unwrap();
-        let illumination_lux = si1145.read_lux().unwrap();
-        let uv_index = si1145.read_uv_index().unwrap();
+        let visible_counts = si1145.read_raw_visible().unwrap();
+        let ir_counts = si1145.read_raw_infrared().unwrap();
+        let illumination_lux = si1145.measure_lux().unwrap();
+        let uv_index = si1145.measure_uv_index().unwrap();
 
         defmt::info!("environment,position=bedroom-nw-window temperature={=f32},humidity={=f32},abs-humidity={=f32},illumination={=f32},uv-index={=f32},co2-eq={=u16},tvoc={=u16},visible-adc={=u16},ir-adc={=u16}",
                      temperature,
