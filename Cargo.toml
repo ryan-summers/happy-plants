@@ -21,7 +21,7 @@ embedded-hal-async = "1"
 embedded-hal = "1"
 embedded-hal-bus = "0.2"
 
-si7021 = { path = "si7021-rs" }
+si7021 = { git = "https://github.com/ryan-summers/si7021-rs" }
 sgp30 = { git = "https://github.com/hawkw/sgp30-rs", branch = "eliza/embedded-hal-1.0" }
 si1145 = "0.1"
 libm = { version = "0.2", default-features = false }
