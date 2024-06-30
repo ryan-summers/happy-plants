@@ -1,7 +1,7 @@
 #![no_std]
+use core::convert::TryFrom;
 use embedded_hal::i2c::I2c;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use core::convert::TryFrom;
 
 #[derive(IntoPrimitive)]
 #[repr(u8)]

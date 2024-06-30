@@ -23,6 +23,8 @@ embedded-hal-bus = "0.2"
 
 si7021 = { path = "si7021-rs" }
 si1145 = { path = "si1145" }
+sgp30 = { git = "https://github.com/hawkw/sgp30-rs", branch = "eliza/embedded-hal-1.0" }
+libm = { version = "0.2", default-features = false }
 
 [profile.release]
 codegen-units = 1 # better optimizations
