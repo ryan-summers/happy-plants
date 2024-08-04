@@ -12,7 +12,6 @@ defmt-rtt = "0.4"
 
 cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7"
-panic-probe = { version = "0.3", features = ["print-defmt"] }
 
 embassy-nrf = { git = "https://github.com/embassy-rs/embassy", branch = "main", features = ["defmt", "nrf52840", "gpiote", "time-driver-rtc1"]}
 embassy-executor = { git = "https://github.com/embassy-rs/embassy", branch = "main" , features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
@@ -20,6 +19,7 @@ embassy-time = { git = "https://github.com/embassy-rs/embassy", branch = "main" 
 embedded-hal-async = "1"
 embedded-hal = "1"
 embedded-hal-bus = "0.2"
+panic-persist = {version = "0.3", features = ["utf8"] }
 
 si7021 = { git = "https://github.com/ryan-summers/si7021-rs" }
 sgp30 = { git = "https://github.com/hawkw/sgp30-rs", branch = "eliza/embedded-hal-1.0" }

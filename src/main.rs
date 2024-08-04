@@ -1,13 +1,14 @@
 #![no_std]
 #![no_main]
 
+use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_nrf::{
     bind_interrupts, peripherals,
     twim::{self, Twim},
 };
 use embedded_hal::delay::DelayNs;
-use {defmt_rtt as _, panic_probe as _};
+use panic_persist as _;
 
 use core::cell::RefCell;
 use embedded_hal_bus::i2c::RefCellDevice;
@@ -21,19 +22,23 @@ bind_interrupts!(struct Irqs {
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
+    if let Some(msg) = panic_persist::get_panic_message_utf8() {
+        defmt::info!("panic, msg=\"{}\"", msg);
+    }
+
     let p = embassy_nrf::init(Default::default());
+
+    // Let the sensors all power up before communicating.
+    let mut delay = embassy_time::Delay;
+    delay.delay_ms(100);
 
     let config = twim::Config::default();
     let twi = Twim::new(p.TWISPI0, Irqs, p.P0_13, p.P0_15, config);
-    let mut delay = embassy_time::Delay;
     let twi_ref_cell = RefCell::new(twi);
 
-    defmt::info!("Initializing sensors");
     let mut si7021 = Si7021::new(RefCellDevice::new(&twi_ref_cell));
-    defmt::info!("SI7021 initialized");
 
     let mut si1145 = Si1145::new(RefCellDevice::new(&twi_ref_cell), &mut delay).unwrap();
-    defmt::info!("SI1145 initialized");
 
     let mut sgp30 = Sgp30::new(RefCellDevice::new(&twi_ref_cell), 0x58, embassy_time::Delay);
     sgp30.init().unwrap();
